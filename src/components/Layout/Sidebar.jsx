@@ -1,6 +1,7 @@
-import { LayoutDashboard, Store, Package, Users, Settings, FileText, Receipt } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { LayoutDashboard, Store, Package, Users, Settings, FileText, Receipt, LogOut } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { supabase } from "../../lib/supabase";
 
 const navItems = [
     { icon: LayoutDashboard, label: "Home", path: "/" },
@@ -41,6 +42,20 @@ export default function Sidebar() {
                     );
                 })}
             </nav>
+
+            <div className="p-4 mt-auto">
+                <button
+                    onClick={async () => {
+                        await supabase.auth.signOut();
+                        // Navigate is handled by ProtectedRoute or we can force it
+                        window.location.href = '/login';
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-slate-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all duration-200"
+                >
+                    <LogOut size={22} />
+                    <span className="font-medium text-sm">Logout</span>
+                </button>
+            </div>
         </aside>
     );
 }
