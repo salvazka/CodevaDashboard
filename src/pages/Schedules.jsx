@@ -38,6 +38,7 @@ export default function Schedules() {
                     *,
                     members (name, phone)
                 `)
+                .neq('status', 'Billed')
                 .order('created_at', { ascending: false });
 
             // If table doesn't exist yet, this will error, but we handle gracefully for now
@@ -160,6 +161,11 @@ export default function Schedules() {
                 }]);
 
             if (itemError) throw itemError;
+
+            await supabase
+                .from('service_tickets')
+                .update({ status: 'Billed' })
+                .eq('id', ticket.id);
 
             navigate('/invoice', {
                 state: {

@@ -92,6 +92,7 @@ export default function Home() {
                 .from('service_tickets')
                 .select('*')
                 .neq('status', 'Completed')
+                .neq('status', 'Billed')
                 .order('created_at', { ascending: false });
 
             if (!ticketsError && tickets) {
@@ -168,8 +169,8 @@ export default function Home() {
                                                 className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group"
                                             >
                                                 <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${ticket.status === 'Ready for Pickup' ? 'bg-purple-500' :
-                                                        ticket.status === 'In Progress' ? 'bg-orange-500' :
-                                                            'bg-slate-400'
+                                                    ticket.status === 'In Progress' ? 'bg-orange-500' :
+                                                        'bg-slate-400'
                                                     }`} />
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
