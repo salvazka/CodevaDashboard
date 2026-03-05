@@ -69,7 +69,8 @@ export default function POS() {
                 .from('transactions')
                 .select(`
           *,
-          members (name, phone)
+          members (name, phone),
+          transaction_items (product_name, quantity, price)
         `)
                 .eq('status', 'pending')
                 .order('created_at', { ascending: false });
@@ -86,7 +87,7 @@ export default function POS() {
             // 1. Fetch transaction details first to pass to invoice
             const { data: transaction, error: fetchError } = await supabase
                 .from('transactions')
-                .select('*, items, members(name)')
+                .select('*, members(name), transaction_items(product_name, quantity, price)')
                 .eq('id', transactionId)
                 .single();
 
@@ -107,7 +108,7 @@ export default function POS() {
             if (newStatus === 'completed') {
                 navigate('/invoice', {
                     state: {
-                        cart: transaction.items || [],
+                        cart: transaction.transaction_items?.map(i => ({ name: i.product_name, quantity: i.quantity, price: i.price })) || [],
                         total: transaction.total,
                         customerName: transaction.members?.name || transaction.guest_name || 'Guest',
                         type: transaction.member_id ? 'Member' : 'Guest',
@@ -228,7 +229,6 @@ export default function POS() {
                     member_id: memberId,
                     total: totalAmount,
                     payment_method: paymentMethod,
-                    items: cart,
                     guest_name: memberId ? null : customerName,
                     status: transactionStatus
                 }])
@@ -314,7 +314,7 @@ export default function POS() {
             if (transactionStatus === 'completed') {
                 navigate('/invoice', {
                     state: {
-                        cart: transaction.items || cart,
+                        cart: cart,
                         total: totalAmount,
                         customerName: customerName,
                         type: memberId ? 'Member' : 'Guest',
@@ -724,9 +724,9 @@ export default function POS() {
                                         {/* Transaction Items */}
                                         <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                                             <p className="text-xs font-bold text-slate-400 mb-2">Items:</p>
-                                            {transaction.items && transaction.items.map((item, idx) => (
+                                            {transaction.transaction_items && transaction.transaction_items.map((item, idx) => (
                                                 <div key={idx} className="flex justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
-                                                    <span>{item.quantity}x {item.name}</span>
+                                                    <span>{item.quantity}x {item.product_name}</span>
                                                     <span>{formatRupiah(item.price * item.quantity)}</span>
                                                 </div>
                                             ))}

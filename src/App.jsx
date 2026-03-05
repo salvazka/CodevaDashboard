@@ -9,6 +9,7 @@ import Login from './pages/Login'
 import Invoice from './pages/Invoice'
 import History from './pages/History'
 import Expenses from './pages/Expenses'
+import Schedules from './pages/Schedules'
 
 import ProtectedRoute from './components/ProtectedRoute'
 import { supabase } from './lib/supabase'
@@ -69,7 +70,8 @@ function App() {
         <Route path="inventory" element={<Inventory />} />
         <Route path="members" element={<Members />} />
         <Route path="expenses" element={<Expenses />} />
-        <Route path="history" element={<History />} /> {/* Added */}
+        <Route path="history" element={<History />} />
+        <Route path="schedules" element={<Schedules />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

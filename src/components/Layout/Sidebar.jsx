@@ -1,4 +1,4 @@
-import { LayoutDashboard, Store, Package, Users, Settings, FileText, Receipt, LogOut } from "lucide-react";
+import { LayoutDashboard, Store, Package, Users, Settings, FileText, Receipt, LogOut, CalendarDays } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { supabase } from "../../lib/supabase";
@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase";
 const navItems = [
     { icon: LayoutDashboard, label: "Home", path: "/" },
     { icon: Store, label: "POS", path: "/pos" },
+    { icon: CalendarDays, label: "Schedules", path: "/schedules" },
     { icon: Package, label: "Inventory", path: "/inventory" },
     { icon: Receipt, label: "Expenses", path: "/expenses" },
     { icon: Users, label: "Members", path: "/members" },

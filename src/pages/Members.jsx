@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, SlidersHorizontal, Plus, Phone, Bell, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, Plus, Phone, Loader2, Trash2 } from 'lucide-react';
 
 export default function Members() {
     const [members, setMembers] = useState([]);
@@ -61,6 +61,23 @@ export default function Members() {
         }
     };
 
+    const deleteMember = async (id, name) => {
+        if (!window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('members')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchMembers();
+        } catch (error) {
+            console.error('Error deleting member:', error.message);
+            alert('Failed to delete member.');
+        }
+    };
+
     const filteredMembers = members.filter(member =>
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.phone.includes(searchTerm)
@@ -75,10 +92,6 @@ export default function Members() {
                         <h1 className="text-xl font-bold text-slate-900 dark:text-white">Members</h1>
                         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Manage loyalty & customers</p>
                     </div>
-                    <button className="relative p-2 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                        <Bell size={20} />
-                        <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
-                    </button>
                 </div>
                 <div className="relative">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -120,77 +133,89 @@ export default function Members() {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-end">
-                                    <div className="flex space-x-1 mb-1">
-                                        <span className="text-sm font-bold text-primary">{member.points} Point</span>
+                                <div className="flex flex-col items-end gap-2">
+                                    <div className="flex flex-col items-end">
+                                        <div className="flex space-x-1 mb-1">
+                                            <span className="text-sm font-bold text-primary">{member.points} Point</span>
+                                        </div>
+                                        {member.points >= 6 ? (
+                                            <p className="text-[10px] font-bold text-white bg-green-500 px-2 py-0.5 rounded-md">Reward Ready!</p>
+                                        ) : (
+                                            <p className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">Accumulating</p>
+                                        )}
                                     </div>
-                                    {member.points >= 100 ? (
-                                        <p className="text-[10px] font-bold text-white bg-green-500 px-2 py-0.5 rounded-md">Reward Ready!</p>
-                                    ) : (
-                                        <p className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">Accumulating</p>
-                                    )}
+                                    <button
+                                        onClick={() => deleteMember(member.id, member.name)}
+                                        className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                        title="Delete Member"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             </div>
                         ))}
                     </div>
-                )}
-            </main>
+                )
+                }
+            </main >
 
             {/* FAB */}
-            <button
+            < button
                 onClick={() => setShowAddModal(true)}
                 className="fixed bottom-24 right-5 w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/30 flex items-center justify-center z-40 hover:scale-105 transition-transform active:scale-95"
             >
                 <Plus size={28} />
-            </button>
+            </button >
 
             {/* Add Member Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-6 shadow-xl animate-in fade-in zoom-in duration-200">
-                        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Add New Member</h2>
-                        <form onSubmit={addMember} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Full Name</label>
-                                <input
-                                    autoFocus
-                                    required
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                    placeholder="e.g. John Doe"
-                                    value={newMember.name}
-                                    onChange={e => setNewMember({ ...newMember, name: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Phone Number</label>
-                                <input
-                                    required
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                    placeholder="e.g. 08123456789"
-                                    value={newMember.phone}
-                                    onChange={e => setNewMember({ ...newMember, phone: e.target.value })}
-                                />
-                            </div>
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddModal(false)}
-                                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="flex-1 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                                >
-                                    {submitting ? 'Adding...' : 'Add Member'}
-                                </button>
-                            </div>
-                        </form>
+            {
+                showAddModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-6 shadow-xl animate-in fade-in zoom-in duration-200">
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Add New Member</h2>
+                            <form onSubmit={addMember} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Full Name</label>
+                                    <input
+                                        autoFocus
+                                        required
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                        placeholder="e.g. John Doe"
+                                        value={newMember.name}
+                                        onChange={e => setNewMember({ ...newMember, name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Phone Number</label>
+                                    <input
+                                        required
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                        placeholder="e.g. 08123456789"
+                                        value={newMember.phone}
+                                        onChange={e => setNewMember({ ...newMember, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAddModal(false)}
+                                        className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={submitting}
+                                        className="flex-1 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                    >
+                                        {submitting ? 'Adding...' : 'Add Member'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

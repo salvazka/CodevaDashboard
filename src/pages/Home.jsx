@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Store,
     UserPlus,
@@ -6,12 +6,15 @@ import {
     TrendingUp,
     Users,
     Bell,
-    Loader2
+    Loader2,
+    Calendar,
+    ChevronRight
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 export default function Home() {
+    const navigate = useNavigate();
     const [stats, setStats] = useState({
         totalSales: 0,
         totalExpenses: 0,
@@ -20,18 +23,39 @@ export default function Home() {
     });
     const [loading, setLoading] = useState(true);
 
+    // Notifications State
+    const [pendingSchedules, setPendingSchedules] = useState([]);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const notificationsRef = useRef(null);
+
     useEffect(() => {
         fetchDashboardData();
+
+        // Handle click outside to close notifications
+        function handleClickOutside(event) {
+            if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+                setShowNotifications(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
 
+            // Get current month boundaries
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+
             // 1. Fetch Total Sales
             const { data: transactions, error: transError } = await supabase
                 .from('transactions')
-                .select('total, status'); // Use correct column name 'total'
+                .select('total, status')
+                .gte('created_at', startOfMonth)
+                .lte('created_at', endOfMonth);
 
             if (transError) throw transError;
 
@@ -44,22 +68,39 @@ export default function Home() {
             // 2. Fetch Total Expenses
             const { data: expenses, error: expenseError } = await supabase
                 .from('expenses')
-                .select('amount');
+                .select('amount')
+                .gte('date', startOfMonth)
+                .lte('date', endOfMonth);
 
             if (expenseError) throw expenseError;
 
             const totalExpenses = expenses?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0;
 
             // 3. Fetch Total Members
-            const { count: memberCount, error: memberError } = await supabase
-                .from('members')
-                .select('*', { count: 'exact', head: true });
+            let memberCount = 0;
+            try {
+                const { count, error: memberError } = await supabase
+                    .from('members')
+                    .select('*', { count: 'exact', head: true });
+                if (!memberError) memberCount = count;
+            } catch (err) {
+                console.error("Members fetch error:", err);
+            }
 
-            if (memberError) throw memberError;
+            // 4. Fetch Pending Schedules
+            const { data: tickets, error: ticketsError } = await supabase
+                .from('service_tickets')
+                .select('*')
+                .neq('status', 'Completed')
+                .order('created_at', { ascending: false });
+
+            if (!ticketsError && tickets) {
+                setPendingSchedules(tickets);
+            }
 
             setStats({
                 totalSales,
-                totalExpenses, // Add this
+                totalExpenses,
                 totalMembers: memberCount || 0,
                 totalOrders
             });
@@ -85,10 +126,82 @@ export default function Home() {
                     </p>
                     <h1 className="text-xl font-bold text-slate-900 dark:text-white">Welcome, Admin</h1>
                 </div>
-                <button className="relative p-2 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                    <Bell size={20} />
-                    {/* Notification dot can be dynamic later */}
-                </button>
+
+                <div className="relative" ref={notificationsRef}>
+                    <button
+                        onClick={() => setShowNotifications(!showNotifications)}
+                        className="relative p-2 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    >
+                        <Bell size={20} />
+                        {pendingSchedules.length > 0 && (
+                            <span className="absolute top-1.5 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse"></span>
+                        )}
+                    </button>
+
+                    {/* Notifications Dropdown */}
+                    {showNotifications && (
+                        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-black/50 overflow-hidden pt-1 pb-2 z-40 transform origin-top-right transition-all">
+                            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    Pending Schedules
+                                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 py-0.5 px-2 rounded-full text-xs">
+                                        {pendingSchedules.length}
+                                    </span>
+                                </h3>
+                            </div>
+
+                            <div className="max-h-80 overflow-y-auto w-full">
+                                {pendingSchedules.length === 0 ? (
+                                    <div className="py-8 text-center px-4">
+                                        <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+                                            <Calendar size={20} />
+                                        </div>
+                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">All caught up!</p>
+                                        <p className="text-xs text-slate-400 mt-1">No pending service schedules.</p>
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50 w-full flex flex-col">
+                                        {pendingSchedules.map(ticket => (
+                                            <button
+                                                key={ticket.id}
+                                                onClick={() => navigate('/schedules')}
+                                                className="w-full text-left p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 group"
+                                            >
+                                                <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${ticket.status === 'Ready for Pickup' ? 'bg-purple-500' :
+                                                        ticket.status === 'In Progress' ? 'bg-orange-500' :
+                                                            'bg-slate-400'
+                                                    }`} />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                                                        {ticket.activity_name}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                                        {ticket.device_model || ticket.service_type}
+                                                    </p>
+                                                    <p className="text-xs font-medium text-primary mt-1.5 flex items-center justify-between">
+                                                        {ticket.status}
+                                                        <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity -ml-2" />
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {pendingSchedules.length > 0 && (
+                                <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800">
+                                    <button
+                                        onClick={() => navigate('/schedules')}
+                                        className="w-full py-1.5 text-xs font-semibold text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary transition-colors text-center"
+                                    >
+                                        View all schedules
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </header>
 
             <main className="p-5 space-y-6 flex-1 overflow-y-auto">
@@ -108,7 +221,9 @@ export default function Home() {
                 {/* Dashboard Summary */}
                 <section className="space-y-4">
                     <div className="flex items-center justify-between px-1">
-                        <h2 className="font-bold text-lg text-slate-800 dark:text-white">Overview</h2>
+                        <h2 className="font-bold text-lg text-slate-800 dark:text-white">
+                            Overview ({new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })})
+                        </h2>
                         <button onClick={fetchDashboardData} className="text-xs text-primary font-medium hover:underline">
                             Refresh Data
                         </button>
