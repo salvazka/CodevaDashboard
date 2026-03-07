@@ -112,7 +112,7 @@ export default function Inventory() {
                     name: newItem.name,
                     sku: newItem.sku,
                     category: newItem.category,
-                    price: parseFloat(newItem.price) || 0,
+                    price: parseFloat(newItem.price.toString().replace(/\D/g, '')) || 0,
                     stock: parseInt(newItem.stock) || 0,
                     status: 'active'
                 }])
@@ -131,6 +131,14 @@ export default function Inventory() {
         } finally {
             setUpdating(false);
         }
+    };
+
+    const handlePriceChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val) {
+            val = parseInt(val).toLocaleString('id-ID');
+        }
+        setNewItem({ ...newItem, price: val });
     };
 
     return (
@@ -252,6 +260,17 @@ export default function Inventory() {
                                     placeholder="e.g. iPhone 13 Screen"
                                     value={newItem.name}
                                     onChange={e => setNewItem({ ...newItem, name: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Price (Rp)</label>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-primary/50"
+                                    placeholder="0"
+                                    value={newItem.price}
+                                    onChange={handlePriceChange}
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-3">

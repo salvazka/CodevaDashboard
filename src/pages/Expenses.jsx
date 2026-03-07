@@ -84,7 +84,7 @@ export default function Expenses() {
             // 1. Prepare Expense Data
             const expenseData = {
                 description: formData.description,
-                amount: parseFloat(formData.amount),
+                amount: parseFloat(formData.amount.toString().replace(/\D/g, '')),
                 category: formData.category,
                 date: formData.date || new Date(),
                 product_id: formData.category === 'stock_purchase' ? formData.productId : null,
@@ -141,6 +141,14 @@ export default function Expenses() {
 
     const formatRupiah = (amount) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+    };
+
+    const handleAmountChange = (e) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val) {
+            val = parseInt(val).toLocaleString('id-ID');
+        }
+        setFormData({ ...formData, amount: val });
     };
 
     const filteredExpenses = expenses.filter(expense =>
@@ -352,14 +360,12 @@ export default function Expenses() {
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Total Amount (Rp)</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     required
-                                    min="0.01"
-                                    step="0.01"
                                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-primary/50"
                                     placeholder="0"
                                     value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                    onChange={handleAmountChange}
                                 />
                             </div>
 

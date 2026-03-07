@@ -22,7 +22,8 @@ export default function Schedules() {
         scheduled_at: '',
         status: 'Scheduled',
         estimated_total: '',
-        notes: ''
+        notes: '',
+        technician_name: ''
     });
 
     useEffect(() => {
@@ -62,7 +63,7 @@ export default function Schedules() {
             const payload = {
                 ...newTicket,
                 scheduled_at: newTicket.scheduled_at || null,
-                estimated_total: newTicket.estimated_total ? parseFloat(newTicket.estimated_total) : 0
+                estimated_total: newTicket.estimated_total ? parseFloat(newTicket.estimated_total.toString().replace(/\D/g, '')) : 0
             };
 
             const { error } = await supabase
@@ -82,7 +83,8 @@ export default function Schedules() {
                 scheduled_at: '',
                 status: 'Scheduled',
                 estimated_total: '',
-                notes: ''
+                notes: '',
+                technician_name: ''
             });
             fetchTickets();
         } catch (error) {
@@ -188,6 +190,14 @@ export default function Schedules() {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
     };
 
+    const handlePriceChange = (e, field) => {
+        let val = e.target.value.replace(/\D/g, ''); // Remove non-digits
+        if (val) {
+            val = parseInt(val).toLocaleString('id-ID'); // Format with dots
+        }
+        setNewTicket({ ...newTicket, [field]: val });
+    };
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'Scheduled': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
@@ -288,7 +298,27 @@ export default function Schedules() {
                                     <div>
                                         <p className="font-semibold text-xs text-slate-500 mb-1">Device & Location</p>
                                         <p className="flex items-center gap-1"><Laptop size={14} /> {ticket.device_model || 'Unknown'}</p>
-                                        <p className="flex items-center gap-1 text-xs mt-0.5"><MapPin size={12} /> {ticket.location || ticket.service_type}</p>
+                                        <div className="flex items-center gap-1 text-xs mt-0.5">
+                                            <MapPin size={12} />
+                                            {ticket.location ? (
+                                                <a
+                                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ticket.location)}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-primary hover:underline"
+                                                    title="Open in Google Maps"
+                                                >
+                                                    {ticket.location}
+                                                </a>
+                                            ) : (
+                                                ticket.service_type
+                                            )}
+                                        </div>
+                                        {ticket.technician_name && (
+                                            <p className="mt-1 text-xs text-slate-500 font-semibold bg-slate-200/50 dark:bg-slate-700/50 w-fit px-1.5 py-0.5 rounded-md">
+                                                PIC: {ticket.technician_name}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -380,6 +410,19 @@ export default function Schedules() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">PIC / Handled By</label>
+                                    <select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                        value={newTicket.technician_name} onChange={e => setNewTicket({ ...newTicket, technician_name: e.target.value })}>
+                                        <option value="">-- Select Technician --</option>
+                                        <option value="Vian">Vian</option>
+                                        <option value="Sandy">Sandy</option>
+                                        <option value="Bang aby">Bang aby</option>
+                                        <option value="Om tony">Om tony</option>
+                                        <option value="Ferdy">Ferdy</option>
+                                        <option value="Zacky">Zacky</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Service Type</label>
                                     <select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
                                         value={newTicket.service_type} onChange={e => setNewTicket({ ...newTicket, service_type: e.target.value })}>
@@ -389,8 +432,8 @@ export default function Schedules() {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Estimated Total (Rp)</label>
-                                    <input type="number" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.estimated_total} onChange={e => setNewTicket({ ...newTicket, estimated_total: e.target.value })} />
+                                    <input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                        value={newTicket.estimated_total} onChange={e => handlePriceChange(e, 'estimated_total')} />
                                 </div>
                             </div>
 

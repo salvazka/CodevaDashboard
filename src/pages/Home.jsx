@@ -10,6 +10,9 @@ import {
     Calendar,
     ChevronRight
 } from 'lucide-react';
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -21,6 +24,7 @@ export default function Home() {
         totalMembers: 0,
         totalOrders: 0
     });
+    const [chartData, setChartData] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Notifications State
@@ -86,6 +90,58 @@ export default function Home() {
             } catch (err) {
                 console.error("Members fetch error:", err);
             }
+
+            // --- CHART DATA (Last 6 Months) ---
+            const sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+            sixMonthsAgo.setDate(1);
+            sixMonthsAgo.setHours(0, 0, 0, 0);
+
+            const { data: allTrans } = await supabase
+                .from('transactions')
+                .select('total, created_at, status')
+                .eq('status', 'completed')
+                .gte('created_at', sixMonthsAgo.toISOString());
+
+            const { data: allExp } = await supabase
+                .from('expenses')
+                .select('amount, date')
+                .gte('date', sixMonthsAgo.toISOString());
+
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            let chartMap = {};
+
+            // Initialize last 6 months
+            for (let i = 5; i >= 0; i--) {
+                let d = new Date();
+                d.setMonth(d.getMonth() - i);
+                let key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                chartMap[key] = { name: key, Income: 0, Expenses: 0 };
+            }
+
+            // Aggregate Sales
+            if (allTrans) {
+                allTrans.forEach(t => {
+                    let d = new Date(t.created_at);
+                    let key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                    if (chartMap[key]) {
+                        chartMap[key].Income += Number(t.total) || 0;
+                    }
+                });
+            }
+
+            // Aggregate Expenses
+            if (allExp) {
+                allExp.forEach(e => {
+                    let d = new Date(e.date);
+                    let key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                    if (chartMap[key]) {
+                        chartMap[key].Expenses += Number(e.amount) || 0;
+                    }
+                });
+            }
+
+            setChartData(Object.values(chartMap));
 
             // 4. Fetch Pending Schedules
             const { data: tickets, error: ticketsError } = await supabase
@@ -298,6 +354,44 @@ export default function Home() {
                         </>
                     )}
                 </section>
+
+                {/* Charts Section */}
+                {!loading && chartData.length > 0 && (
+                    <section className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mt-6">
+                        <h2 className="font-bold text-lg text-slate-800 dark:text-white mb-6">Income vs Expenses (Last 6 Months)</h2>
+                        <div className="h-80 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={chartData}
+                                    margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 12 }}
+                                        dy={10}
+                                    />
+                                    <YAxis
+                                        tickFormatter={(value) => `Rp ${value / 1000}k`}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 12 }}
+                                        dx={-10}
+                                    />
+                                    <Tooltip
+                                        formatter={(value) => [formatRupiah(value), undefined]}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                    <Bar dataKey="Income" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                                    <Bar dataKey="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </section>
+                )}
             </main>
         </div>
     );
