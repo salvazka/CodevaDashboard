@@ -398,8 +398,15 @@ export default function Schedules() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Scheduled Date/Time</label>
-                                    <input type="datetime-local" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.scheduled_at} onChange={e => setNewTicket({ ...newTicket, scheduled_at: e.target.value })} />
+                                    <div className="relative">
+                                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input
+                                            type="datetime-local"
+                                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
+                                            value={newTicket.scheduled_at}
+                                            onChange={e => setNewTicket({ ...newTicket, scheduled_at: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Location / Address</label>

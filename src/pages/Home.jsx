@@ -11,7 +11,7 @@ import {
     ChevronRight
 } from 'lucide-react';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -357,37 +357,56 @@ export default function Home() {
 
                 {/* Charts Section */}
                 {!loading && chartData.length > 0 && (
-                    <section className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mt-6">
-                        <h2 className="font-bold text-lg text-slate-800 dark:text-white mb-6">Income vs Expenses (Last 6 Months)</h2>
-                        <div className="h-80 w-full">
+                    <section className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mt-6 lg:mx-1 flex-1">
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="font-bold text-lg text-slate-800 dark:text-white">Income vs Expenses</h2>
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">Last 6 Months</span>
+                        </div>
+                        <div className="h-[350px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart
+                                <AreaChart
                                     data={chartData}
-                                    margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+                                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                                 >
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                    <defs>
+                                        <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                                     <XAxis
                                         dataKey="name"
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fill: '#64748b', fontSize: 12 }}
+                                        tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }}
                                         dy={10}
                                     />
                                     <YAxis
-                                        tickFormatter={(value) => `Rp ${value / 1000}k`}
+                                        tickFormatter={(value) => {
+                                            if (value >= 1000000) return `Rp ${(value / 1000000).toFixed(value % 1000000 === 0 ? 0 : 1)}Jt`;
+                                            if (value >= 1000) return `Rp ${(value / 1000).toFixed(0)}Rb`;
+                                            return `Rp ${value}`;
+                                        }}
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fill: '#64748b', fontSize: 12 }}
+                                        tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }}
                                         dx={-10}
+                                        width={80}
                                     />
                                     <Tooltip
                                         formatter={(value) => [formatRupiah(value), undefined]}
-                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                        contentStyle={{ borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                                        cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
                                     />
-                                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                    <Bar dataKey="Income" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                                    <Bar dataKey="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                                </BarChart>
+                                    <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+                                    <Area type="monotone" dataKey="Income" name="Pemasukan" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
+                                    <Area type="monotone" dataKey="Expenses" name="Pengeluaran" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorExpense)" />
+                                </AreaChart>
                             </ResponsiveContainer>
                         </div>
                     </section>
