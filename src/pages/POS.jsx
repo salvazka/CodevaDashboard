@@ -208,8 +208,23 @@ export default function POS() {
         setCart(prev => [...prev, newItem]);
         setManualName('');
         setManualPrice('');
-        setRepastaBrand('');
-        setRepastaPkg('');
+    };
+
+    const addRepastaItem = () => {
+        if (!repastaBrand || !repastaPkg) return;
+        const brandData = REPASTA_TEMPLATES.find(t => t.brand === repastaBrand);
+        if (brandData && brandData.packages[repastaPkg]) {
+            const newItem = {
+                id: `repasta-${Date.now()}`,
+                name: `Cleaning & Repasta ${repastaBrand} - ${repastaPkg} Package`,
+                price: brandData.packages[repastaPkg],
+                quantity: 1,
+                isManual: true
+            };
+            setCart(prev => [...prev, newItem]);
+            setRepastaBrand('');
+            setRepastaPkg('');
+        }
     };
 
     const removeFromCart = (itemId) => {
@@ -385,13 +400,6 @@ export default function POS() {
     const handleApplyRepastaTemplate = (brand, pkg) => {
         setRepastaBrand(brand);
         setRepastaPkg(pkg);
-        if (brand && pkg) {
-            const brandData = REPASTA_TEMPLATES.find(t => t.brand === brand);
-            if (brandData && brandData.packages[pkg]) {
-                setManualName(`Cleaning & Repasta ${brand} - ${pkg} Package`);
-                setManualPrice(brandData.packages[pkg].toLocaleString('id-ID'));
-            }
-        }
     };
 
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -577,14 +585,12 @@ export default function POS() {
                         <div className="w-full lg:w-96 flex flex-col bg-white dark:bg-slate-900 h-full border-l border-slate-200 dark:border-slate-800 shadow-xl z-20">
                             <div className="p-5 space-y-6 flex-1 overflow-y-auto">
                                 {/* Manual Entry Section */}
-                                <section>
-                                    <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 px-1">Quick Add Service</h2>
+                                <section className="mb-4">
+                                    <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-1">Repasta Template</h2>
                                     <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-dotted border-slate-300 dark:border-slate-700 space-y-3">
-                                        {/* REPASTA TEMPLATE SELECTORS */}
-                                        <div className="grid grid-cols-2 gap-2 mb-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                                            <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase">📋 Templates</div>
+                                        <div className="grid grid-cols-2 gap-2">
                                             <select
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-primary text-slate-800 dark:text-slate-200 cursor-pointer"
+                                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs focus:ring-1 focus:ring-primary text-slate-800 dark:text-slate-200 cursor-pointer"
                                                 value={repastaBrand}
                                                 onChange={(e) => handleApplyRepastaTemplate(e.target.value, repastaPkg)}
                                             >
@@ -594,7 +600,7 @@ export default function POS() {
                                                 ))}
                                             </select>
                                             <select
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-primary text-slate-800 dark:text-slate-200 cursor-pointer"
+                                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs focus:ring-1 focus:ring-primary text-slate-800 dark:text-slate-200 cursor-pointer"
                                                 value={repastaPkg}
                                                 onChange={(e) => handleApplyRepastaTemplate(repastaBrand, e.target.value)}
                                             >
@@ -604,7 +610,21 @@ export default function POS() {
                                                 <option value="Performance">Performance</option>
                                             </select>
                                         </div>
+                                        <button
+                                            onClick={addRepastaItem}
+                                            className="w-full bg-primary hover:bg-blue-700 text-white py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                            disabled={!repastaBrand || !repastaPkg}
+                                        >
+                                            <Plus size={14} />
+                                            Add Repasta Options
+                                        </button>
+                                    </div>
+                                </section>
 
+                                {/* Manual Entry Section */}
+                                <section>
+                                    <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-1">Quick Custom Service</h2>
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-dotted border-slate-300 dark:border-slate-700 space-y-3">
                                         <div className="grid grid-cols-3 gap-2">
                                             <input
                                                 className="col-span-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white placeholder-slate-400"
@@ -623,7 +643,8 @@ export default function POS() {
                                         </div>
                                         <button
                                             onClick={addManualItem}
-                                            className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+                                            className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                            disabled={!manualName || !manualPrice}
                                         >
                                             <Plus size={14} />
                                             Add Custom Item

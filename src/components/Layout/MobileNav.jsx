@@ -1,11 +1,11 @@
-import { LayoutDashboard, Store, Package, Users, Settings, FileText, Receipt, CalendarDays } from "lucide-react";
+import { LayoutDashboard, Store, Package, Users, Settings, FileText, Receipt, CalendarDays, FilePlus } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import clsx from "clsx";
 
 const navItems = [
     { icon: LayoutDashboard, label: "Home", path: "/" },
-    { icon: Store, label: "POS", path: "/pos" },
     { icon: CalendarDays, label: "Schedules", path: "/schedules" },
+    { icon: FilePlus, label: "Create Invoice", path: "/pos" },
     { icon: Package, label: "Inventory", path: "/inventory" },
     { icon: Receipt, label: "Expenses", path: "/expenses" },
     { icon: Users, label: "Members", path: "/members" },
