@@ -8,6 +8,22 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 
+const REPASTA_TEMPLATES = [
+    { brand: 'Maxtor CTG8', packages: { 'Starter': 150000, 'The Next': 190000, 'Performance': 220000 } },
+    { brand: 'Maxtor CTG10', packages: { 'Starter': 250000, 'The Next': 280000, 'Performance': 300000 } },
+    { brand: 'Arctic MX-4', packages: { 'Starter': 180000, 'The Next': 230000, 'Performance': 280000 } },
+    { brand: 'Arctic MX-6', packages: { 'Starter': 200000, 'The Next': 250000, 'Performance': 300000 } },
+    { brand: 'Arctic MX-7', packages: { 'Starter': 220000, 'The Next': 270000, 'Performance': 320000 } },
+    { brand: 'Grizzly Duronout', packages: { 'Starter': 225000, 'The Next': 275000, 'Performance': 325000 } },
+    { brand: 'Grizzly Kryonaut', packages: { 'Starter': 300000, 'The Next': 350000, 'Performance': 400000 } },
+    { brand: 'Thermalright TF-8', packages: { 'Starter': 270000, 'The Next': 330000, 'Performance': 380000 } },
+    { brand: 'Thermalright TFX', packages: { 'Starter': 350000, 'The Next': 400000, 'Performance': 450000 } },
+    { brand: 'Noctua HT-01', packages: { 'Starter': 230000, 'The Next': 280000, 'Performance': 335000 } },
+    { brand: 'Noctua HT-02', packages: { 'Starter': 260000, 'The Next': 310000, 'Performance': 360000 } },
+    { brand: 'Helios V2', packages: { 'Starter': 300000, 'The Next': 350000, 'Performance': 400000 } },
+    { brand: 'Honeywell 7950', packages: { 'Starter': 320000, 'The Next': 370000, 'Performance': 420000 } }
+];
+
 export default function POS() {
     const navigate = useNavigate();
     const [products, setProducts] = useState([]);
@@ -25,6 +41,9 @@ export default function POS() {
     const [viewMode, setViewMode] = useState('new'); // 'new' or 'pending'
     const [pendingTransactions, setPendingTransactions] = useState([]);
     const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' or 'transfer'
+    const [technicianFee, setTechnicianFee] = useState('');
+    const [repastaBrand, setRepastaBrand] = useState('');
+    const [repastaPkg, setRepastaPkg] = useState('');
 
     useEffect(() => {
         fetchProducts();
@@ -189,6 +208,8 @@ export default function POS() {
         setCart(prev => [...prev, newItem]);
         setManualName('');
         setManualPrice('');
+        setRepastaBrand('');
+        setRepastaPkg('');
     };
 
     const removeFromCart = (itemId) => {
@@ -221,6 +242,7 @@ export default function POS() {
             const totalAmount = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
             const customerName = memberMode === 'member' && selectedMember ? selectedMember.name : (guestName || 'Guest');
             const memberId = memberMode === 'member' && selectedMember ? selectedMember.id : null;
+            const feeValue = technicianFee ? parseFloat(technicianFee.toString().replace(/\D/g, '')) : 0;
 
             // 1. Create Transaction
             const { data: transactionData, error: transError } = await supabase
@@ -228,6 +250,7 @@ export default function POS() {
                 .insert([{
                     member_id: memberId,
                     total: totalAmount,
+                    technician_fee: feeValue,
                     payment_method: paymentMethod,
                     guest_name: memberId ? null : customerName,
                     status: transactionStatus
@@ -302,6 +325,7 @@ export default function POS() {
             setSelectedMember(null);
             setGuestName('');
             setTransactionStatus('completed');
+            setTechnicianFee('');
 
             // Refresh pending transactions if needed
             if (transactionStatus === 'pending') {
@@ -312,6 +336,8 @@ export default function POS() {
 
             // Navigate to Invoice if completed
             if (transactionStatus === 'completed') {
+                alert(`Pembayaran Sukses!\n\nHarga Total: Rp ${totalAmount.toLocaleString('id-ID')}\nFee Teknisi: Rp ${feeValue.toLocaleString('id-ID')}\nNet Masuk Kas: Rp ${(totalAmount - feeValue).toLocaleString('id-ID')}`);
+
                 navigate('/invoice', {
                     state: {
                         cart: cart,
@@ -354,6 +380,18 @@ export default function POS() {
             val = parseInt(val).toLocaleString('id-ID');
         }
         setManualPrice(val);
+    };
+
+    const handleApplyRepastaTemplate = (brand, pkg) => {
+        setRepastaBrand(brand);
+        setRepastaPkg(pkg);
+        if (brand && pkg) {
+            const brandData = REPASTA_TEMPLATES.find(t => t.brand === brand);
+            if (brandData && brandData.packages[pkg]) {
+                setManualName(`Cleaning & Repasta ${brand} - ${pkg} Package`);
+                setManualPrice(brandData.packages[pkg].toLocaleString('id-ID'));
+            }
+        }
     };
 
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -542,6 +580,31 @@ export default function POS() {
                                 <section>
                                     <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 px-1">Quick Add Service</h2>
                                     <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-dotted border-slate-300 dark:border-slate-700 space-y-3">
+                                        {/* REPASTA TEMPLATE SELECTORS */}
+                                        <div className="grid grid-cols-2 gap-2 mb-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                                            <div className="col-span-2 text-[10px] font-bold text-slate-400 uppercase">📋 Templates</div>
+                                            <select
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-primary text-slate-800 dark:text-slate-200 cursor-pointer"
+                                                value={repastaBrand}
+                                                onChange={(e) => handleApplyRepastaTemplate(e.target.value, repastaPkg)}
+                                            >
+                                                <option value="">-- Brand Pasta --</option>
+                                                {REPASTA_TEMPLATES.map(t => (
+                                                    <option key={t.brand} value={t.brand}>{t.brand}</option>
+                                                ))}
+                                            </select>
+                                            <select
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-primary text-slate-800 dark:text-slate-200 cursor-pointer"
+                                                value={repastaPkg}
+                                                onChange={(e) => handleApplyRepastaTemplate(repastaBrand, e.target.value)}
+                                            >
+                                                <option value="">-- Package --</option>
+                                                <option value="Starter">Starter</option>
+                                                <option value="The Next">The Next</option>
+                                                <option value="Performance">Performance</option>
+                                            </select>
+                                        </div>
+
                                         <div className="grid grid-cols-3 gap-2">
                                             <input
                                                 className="col-span-2 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white placeholder-slate-400"
@@ -675,9 +738,26 @@ export default function POS() {
                                     </div>
                                 </div>
 
+                                {/* Technician Fee Input */}
+                                <div className="mb-4">
+                                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 px-1">🛠️ Technician Fee (Potongan Teknisi)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Rp 0"
+                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50 text-orange-600 dark:text-orange-400 font-semibold transition-all"
+                                        value={technicianFee}
+                                        onChange={(e) => {
+                                            let val = e.target.value.replace(/\D/g, '');
+                                            if (val) val = parseInt(val).toLocaleString('id-ID');
+                                            setTechnicianFee(val);
+                                        }}
+                                    />
+                                    <p className="text-[9px] text-slate-400 px-1 mt-1">Isi jika ada pembagian komisi untuk teknisi. Akan dihitung memotong net-income sistem di History.</p>
+                                </div>
+
                                 <div className="space-y-2 mb-4">
-                                    <div className="flex justify-between items-end pt-2">
-                                        <span className="font-bold text-slate-900 dark:text-white">Total Amount</span>
+                                    <div className="flex justify-between items-end pt-2 border-t border-slate-200 dark:border-slate-700">
+                                        <span className="font-bold text-slate-900 dark:text-white">Gross Total</span>
                                         <span className="text-2xl font-bold text-primary">{formatRupiah(total)}</span>
                                     </div>
                                 </div>

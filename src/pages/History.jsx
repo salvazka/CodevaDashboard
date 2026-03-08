@@ -74,7 +74,7 @@ export default function History() {
             return;
         }
 
-        const headers = ['Date', 'Time', 'Transaction ID', 'Type', 'Customer Name', 'Customer Type', 'Phone', 'Total Items', 'Total Amount'];
+        const headers = ['Date', 'Time', 'Transaction ID', 'Type', 'Customer Name', 'Customer Type', 'Phone', 'Total Items', 'Gross Total', 'Technician Fee', 'Net Income'];
         const csvRows = [headers.join(',')];
 
         exportData.forEach(tx => {
@@ -97,7 +97,9 @@ export default function History() {
                 customerType,
                 `"${phone}"`,
                 itemsCount,
-                tx.total
+                tx.total,
+                tx.technician_fee || 0,
+                tx.total - (tx.technician_fee || 0)
             ];
             csvRows.push(row.join(','));
         });
@@ -237,7 +239,7 @@ export default function History() {
                                                         <th className="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400">Transaction ID</th>
                                                         <th className="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400">Customer</th>
                                                         <th className="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400">Items</th>
-                                                        <th className="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 text-right">Total</th>
+                                                        <th className="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 text-right">Net Income</th>
                                                         <th className="px-6 py-4 font-semibold text-slate-500 dark:text-slate-400 text-right print:hidden">Actions</th>
                                                     </tr>
                                                 </thead>
@@ -284,8 +286,16 @@ export default function History() {
                                                             <td className="px-6 py-4 text-slate-500">
                                                                 {tx.transaction_items ? tx.transaction_items.length : 0} items
                                                             </td>
-                                                            <td className="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">
-                                                                {formatRupiah(tx.total)}
+                                                            <td className="px-6 py-4 text-right flex flex-col items-end gap-0.5">
+                                                                {tx.technician_fee > 0 && (
+                                                                    <>
+                                                                        <span className="text-[10px] text-slate-400">Gross: {formatRupiah(tx.total)}</span>
+                                                                        <span className="text-[10px] text-orange-500 font-medium">- Fee: {formatRupiah(tx.technician_fee)}</span>
+                                                                    </>
+                                                                )}
+                                                                <span className="font-bold text-primary text-sm">
+                                                                    {formatRupiah(tx.total - (tx.technician_fee || 0))}
+                                                                </span>
                                                             </td>
                                                             <td className="px-6 py-4 text-right print:hidden">
                                                                 <button

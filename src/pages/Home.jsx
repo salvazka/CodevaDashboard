@@ -57,7 +57,7 @@ export default function Home() {
             // 1. Fetch Total Sales
             const { data: transactions, error: transError } = await supabase
                 .from('transactions')
-                .select('total, status')
+                .select('total, technician_fee, status')
                 .gte('created_at', startOfMonth)
                 .lte('created_at', endOfMonth);
 
@@ -66,7 +66,7 @@ export default function Home() {
             // Only sum completed transactions for accurate sales
             const totalSales = transactions
                 ?.filter(t => t.status === 'completed')
-                .reduce((sum, t) => sum + (Number(t.total) || 0), 0) || 0;
+                .reduce((sum, t) => sum + ((Number(t.total) || 0) - (Number(t.technician_fee) || 0)), 0) || 0;
             const totalOrders = transactions?.length || 0;
 
             // 2. Fetch Total Expenses
@@ -99,7 +99,7 @@ export default function Home() {
 
             const { data: allTrans } = await supabase
                 .from('transactions')
-                .select('total, created_at, status')
+                .select('total, technician_fee, created_at, status')
                 .eq('status', 'completed')
                 .gte('created_at', sixMonthsAgo.toISOString());
 
@@ -125,7 +125,7 @@ export default function Home() {
                     let d = new Date(t.created_at);
                     let key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
                     if (chartMap[key]) {
-                        chartMap[key].Income += Number(t.total) || 0;
+                        chartMap[key].Income += (Number(t.total) || 0) - (Number(t.technician_fee) || 0);
                     }
                 });
             }
