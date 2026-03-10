@@ -10,6 +10,7 @@ import Invoice from './pages/Invoice'
 import History from './pages/History'
 import Expenses from './pages/Expenses'
 import Schedules from './pages/Schedules'
+import AiAutoInput from './pages/AiAutoInput'
 
 import ProtectedRoute from './components/ProtectedRoute'
 import { supabase } from './lib/supabase'
@@ -72,6 +73,7 @@ function App() {
         <Route path="expenses" element={<Expenses />} />
         <Route path="history" element={<History />} />
         <Route path="schedules" element={<Schedules />} />
+        <Route path="ai-input" element={<AiAutoInput />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
