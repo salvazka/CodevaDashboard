@@ -45,7 +45,6 @@ export default function Schedules() {
         notes: '',
         technician_name: ''
     });
-
     const [repastaBrand, setRepastaBrand] = useState('');
     const [repastaPkg, setRepastaPkg] = useState('');
 
@@ -71,12 +70,13 @@ export default function Schedules() {
     }, []);
 
     const openEditModal = (ticket) => {
-        const formatDateForInput = (dateString) => {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            const offset = date.getTimezoneOffset() * 60000;
-            return (new Date(date - offset)).toISOString().slice(0, 16);
-        };
+        let scDateTime = '';
+        if (ticket.scheduled_at) {
+            const d = new Date(ticket.scheduled_at);
+            const offset = d.getTimezoneOffset() * 60000;
+            const localIso = (new Date(d.getTime() - offset)).toISOString();
+            scDateTime = localIso.slice(0, 16);
+        }
 
         setNewTicket({
             guest_name: ticket.guest_name || '',
@@ -85,7 +85,7 @@ export default function Schedules() {
             activity_name: ticket.activity_name || '',
             service_type: ticket.service_type || 'In-Store',
             location: ticket.location || '',
-            scheduled_at: formatDateForInput(ticket.scheduled_at),
+            scheduled_at: scDateTime,
             status: ticket.status || 'Scheduled',
             estimated_total: ticket.estimated_total ? ticket.estimated_total.toLocaleString('id-ID') : '',
             notes: ticket.notes || '',
@@ -127,9 +127,23 @@ export default function Schedules() {
         e.preventDefault();
         try {
             setSubmitting(true);
+            let formattedDate = null;
+            if (newTicket.scheduled_at) {
+                const d = new Date(newTicket.scheduled_at);
+                formattedDate = d.toISOString();
+            }
+
             const payload = {
-                ...newTicket,
-                scheduled_at: newTicket.scheduled_at || null,
+                guest_name: newTicket.guest_name,
+                guest_phone: newTicket.guest_phone,
+                device_model: newTicket.device_model,
+                activity_name: newTicket.activity_name,
+                service_type: newTicket.service_type,
+                location: newTicket.location,
+                status: newTicket.status,
+                notes: newTicket.notes,
+                technician_name: newTicket.technician_name,
+                scheduled_at: formattedDate,
                 estimated_total: newTicket.estimated_total ? parseFloat(newTicket.estimated_total.toString().replace(/\D/g, '')) : 0
             };
 
@@ -355,7 +369,7 @@ export default function Schedules() {
                                             {ticket.scheduled_at
                                                 ? new Date(ticket.scheduled_at).toLocaleString('id-ID', {
                                                     day: 'numeric', month: 'short', year: 'numeric',
-                                                    hour: '2-digit', minute: '2-digit'
+                                                    hour: '2-digit', minute: '2-digit', hour12: false
                                                 })
                                                 : 'Unscheduled'}
                                         </p>
@@ -518,7 +532,7 @@ export default function Schedules() {
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Scheduled Date/Time</label>
                                     <div className="relative">
-                                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
                                         <input
                                             type="datetime-local"
                                             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
@@ -574,137 +588,140 @@ export default function Schedules() {
                             </button>
                         </form>
                     </div>
-                </div>
-            )}
+                </div >
+            )
+            }
 
             {/* Repasta Modal */}
-            {showRepastaModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 md:pb-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg p-6 shadow-xl max-h-[85vh] md:max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Quick Template Repasta</h2>
-                            <button onClick={() => { setShowRepastaModal(false); setIsEditing(false); }} className="text-slate-400 hover:text-slate-600">
-                                <X size={24} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={addTicket} className="space-y-4">
-                            {/* Repasta Templates Section */}
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 mt-2 mb-2">
-                                <label className="block text-xs font-bold text-slate-400 mb-2 tracking-wider uppercase">📋 Select Repasta Template</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <select
-                                        required
-                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs focus:ring-2 focus:ring-primary"
-                                        value={repastaBrand}
-                                        onChange={(e) => handleApplyRepastaTemplate(e.target.value, repastaPkg)}
-                                    >
-                                        <option value="">-- Brand Pasta --</option>
-                                        {REPASTA_TEMPLATES.map(t => (
-                                            <option key={t.brand} value={t.brand}>{t.brand}</option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        required
-                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs focus:ring-2 focus:ring-primary"
-                                        value={repastaPkg}
-                                        onChange={(e) => handleApplyRepastaTemplate(repastaBrand, e.target.value)}
-                                    >
-                                        <option value="">-- Package --</option>
-                                        <option value="Starter">Starter</option>
-                                        <option value="The Next">The Next</option>
-                                        <option value="Performance">Performance</option>
-                                    </select>
-                                </div>
+            {
+                showRepastaModal && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 md:pb-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg p-6 shadow-xl max-h-[85vh] md:max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Quick Template Repasta</h2>
+                                <button onClick={() => { setShowRepastaModal(false); setIsEditing(false); }} className="text-slate-400 hover:text-slate-600">
+                                    <X size={24} />
+                                </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Guest/Customer Name</label>
-                                    <input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.guest_name} onChange={e => setNewTicket({ ...newTicket, guest_name: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Phone</label>
-                                    <input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.guest_phone} onChange={e => setNewTicket({ ...newTicket, guest_phone: e.target.value })} />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Device Model</label>
-                                <input required type="text" placeholder="e.g. Lenovo Thinkpad X1, iPhone 13" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                    value={newTicket.device_model} onChange={e => setNewTicket({ ...newTicket, device_model: e.target.value })} />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Issue / Activity Name</label>
-                                <input required type="text" placeholder="e.g. Cleaning & Repasta Maxtor CTG8 (Starter)" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-bold"
-                                    value={newTicket.activity_name} onChange={e => setNewTicket({ ...newTicket, activity_name: e.target.value })} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Scheduled Date/Time</label>
-                                    <div className="relative">
-                                        <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input
-                                            type="datetime-local"
-                                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
-                                            value={newTicket.scheduled_at}
-                                            onChange={e => setNewTicket({ ...newTicket, scheduled_at: e.target.value })}
-                                        />
+                            <form onSubmit={addTicket} className="space-y-4">
+                                {/* Repasta Templates Section */}
+                                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 mt-2 mb-2">
+                                    <label className="block text-xs font-bold text-slate-400 mb-2 tracking-wider uppercase">📋 Select Repasta Template</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <select
+                                            required
+                                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs focus:ring-2 focus:ring-primary"
+                                            value={repastaBrand}
+                                            onChange={(e) => handleApplyRepastaTemplate(e.target.value, repastaPkg)}
+                                        >
+                                            <option value="">-- Brand Pasta --</option>
+                                            {REPASTA_TEMPLATES.map(t => (
+                                                <option key={t.brand} value={t.brand}>{t.brand}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            required
+                                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 text-xs focus:ring-2 focus:ring-primary"
+                                            value={repastaPkg}
+                                            onChange={(e) => handleApplyRepastaTemplate(repastaBrand, e.target.value)}
+                                        >
+                                            <option value="">-- Package --</option>
+                                            <option value="Starter">Starter</option>
+                                            <option value="The Next">The Next</option>
+                                            <option value="Performance">Performance</option>
+                                        </select>
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Location / Address</label>
-                                    <input type="text" placeholder="In-Store or specify address" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.location} onChange={e => setNewTicket({ ...newTicket, location: e.target.value })} />
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">PIC / Handled By</label>
-                                    <select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.technician_name} onChange={e => setNewTicket({ ...newTicket, technician_name: e.target.value })}>
-                                        <option value="">-- Select Technician --</option>
-                                        <option value="Vian">Vian</option>
-                                        <option value="Sandy">Sandy</option>
-                                        <option value="Bang aby">Bang aby</option>
-                                        <option value="Om tony">Om tony</option>
-                                        <option value="Ferdy">Ferdy</option>
-                                        <option value="Zacky">Zacky</option>
-                                    </select>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Guest/Customer Name</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                            value={newTicket.guest_name} onChange={e => setNewTicket({ ...newTicket, guest_name: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Phone</label>
+                                        <input type="text" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                            value={newTicket.guest_phone} onChange={e => setNewTicket({ ...newTicket, guest_phone: e.target.value })} />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Service Type</label>
-                                    <select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                        value={newTicket.service_type} onChange={e => setNewTicket({ ...newTicket, service_type: e.target.value })}>
-                                        <option value="In-Store">In-Store</option>
-                                        <option value="On-Site">On-Site / Call out</option>
-                                    </select>
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Estimated Total (Rp)</label>
-                                    <input type="text" className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-bold"
-                                        value={newTicket.estimated_total} onChange={e => handlePriceChange(e, 'estimated_total')} />
-                                </div>
-                            </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Notes</label>
-                                <textarea rows="3" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
-                                    value={newTicket.notes} onChange={e => setNewTicket({ ...newTicket, notes: e.target.value })}></textarea>
-                            </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Device Model</label>
+                                    <input required type="text" placeholder="e.g. Lenovo Thinkpad X1, iPhone 13" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                        value={newTicket.device_model} onChange={e => setNewTicket({ ...newTicket, device_model: e.target.value })} />
+                                </div>
 
-                            <button type="submit" disabled={submitting || !repastaBrand || !repastaPkg} className="w-full py-3 mt-4 rounded-xl bg-primary text-white font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
-                                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Record'}
-                            </button>
-                        </form>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Issue / Activity Name</label>
+                                    <input required type="text" placeholder="e.g. Cleaning & Repasta Maxtor CTG8 (Starter)" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-bold"
+                                        value={newTicket.activity_name} onChange={e => setNewTicket({ ...newTicket, activity_name: e.target.value })} />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Scheduled Date/Time</label>
+                                        <div className="relative">
+                                            <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                            <input
+                                                type="datetime-local"
+                                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"
+                                                value={newTicket.scheduled_at}
+                                                onChange={e => setNewTicket({ ...newTicket, scheduled_at: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Location / Address</label>
+                                        <input type="text" placeholder="In-Store or specify address" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                            value={newTicket.location} onChange={e => setNewTicket({ ...newTicket, location: e.target.value })} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">PIC / Handled By</label>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                            value={newTicket.technician_name} onChange={e => setNewTicket({ ...newTicket, technician_name: e.target.value })}>
+                                            <option value="">-- Select Technician --</option>
+                                            <option value="Vian">Vian</option>
+                                            <option value="Sandy">Sandy</option>
+                                            <option value="Bang aby">Bang aby</option>
+                                            <option value="Om tony">Om tony</option>
+                                            <option value="Ferdy">Ferdy</option>
+                                            <option value="Zacky">Zacky</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Service Type</label>
+                                        <select className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                            value={newTicket.service_type} onChange={e => setNewTicket({ ...newTicket, service_type: e.target.value })}>
+                                            <option value="In-Store">In-Store</option>
+                                            <option value="On-Site">On-Site / Call out</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Estimated Total (Rp)</label>
+                                        <input type="text" className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-bold"
+                                            value={newTicket.estimated_total} onChange={e => handlePriceChange(e, 'estimated_total')} />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Notes</label>
+                                    <textarea rows="3" className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white"
+                                        value={newTicket.notes} onChange={e => setNewTicket({ ...newTicket, notes: e.target.value })}></textarea>
+                                </div>
+
+                                <button type="submit" disabled={submitting || !repastaBrand || !repastaPkg} className="w-full py-3 mt-4 rounded-xl bg-primary text-white font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">
+                                    {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Record'}
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

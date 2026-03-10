@@ -144,6 +144,22 @@ const TOOLS = [
     {
         type: 'function',
         function: {
+            name: 'update_schedule_details',
+            description: 'Update the date/time or technician assigned to an existing service schedule.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    guest_name: { type: 'string', description: 'Name of the customer on the ticket' },
+                    scheduled_at: { type: 'string', description: 'The new scheduled date and time in ISO8601 format with local timezone offset, e.g., 2026-03-12T14:00:00+07:00' },
+                    technician_name: { type: 'string', description: 'The new technician (PIC) name assigned to handle the service ticket' }
+                },
+                required: ['guest_name']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
             name: 'get_invoice',
             description: 'Fetch an invoice for a specific customer based on their name or phone number. Searches both POS transactions and completed service schedules.',
             parameters: {
@@ -321,7 +337,12 @@ async function executeTool(functionName, args, chatId) {
             }
             const { data, error } = await query;
             if (error) throw error;
-            const formatted = data.map(t => `[${t.status}] ${t.guest_name} - ${t.device_model}: ${t.activity_name} (Tgl: ${t.scheduled_at ? new Date(t.scheduled_at).toLocaleString() : 'Tidak diatur'})`).join('\n');
+            const formatted = data.map(t => {
+                const dateStr = t.scheduled_at ? new Date(t.scheduled_at).toLocaleString('id-ID', { hour12: false }) : 'Tidak diatur';
+                const phoneStr = t.guest_phone ? ` (Phone: ${t.guest_phone})` : '';
+                const techStr = t.technician_name ? ` | PIC/Teknisi: ${t.technician_name}` : '';
+                return `[${t.status}] ${t.guest_name}${phoneStr} - ${t.device_model}: ${t.activity_name} (Tgl: ${dateStr})${techStr}`;
+            }).join('\n');
             return formatted || `Tidak ada data jadwal${args.status ? ` dengan status ${args.status}` : ''}.`;
         }
 
@@ -393,6 +414,38 @@ async function executeTool(functionName, args, chatId) {
 
             if (updateError) throw updateError;
             return `Status jadwal servis pelanggan "${tickets[0].guest_name}" (${tickets[0].device_model}) berhasil diubah menjadi "${args.new_status}".`;
+        }
+
+        else if (functionName === 'update_schedule_details') {
+            const { data: tickets, error: searchError } = await supabase
+                .from('service_tickets')
+                .select('*')
+                .ilike('guest_name', `%${args.guest_name}%`)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (searchError) throw searchError;
+            if (!tickets || tickets.length === 0) return `Jadwal untuk pelanggan "${args.guest_name}" tidak ditemukan.`;
+
+            const ticketId = tickets[0].id;
+            let updates = {};
+            if (args.scheduled_at) updates.scheduled_at = args.scheduled_at;
+            if (args.technician_name) updates.technician_name = args.technician_name;
+
+            if (Object.keys(updates).length === 0) return "Tidak ada data detail jadwal yang diubah. Harap spesifikasikan update jam atau nama teknisi.";
+
+            const { error: updateError } = await supabase
+                .from('service_tickets')
+                .update(updates)
+                .eq('id', ticketId);
+
+            if (updateError) throw updateError;
+
+            let messageStr = [];
+            if (updates.scheduled_at) messageStr.push(`jam ke ${new Date(updates.scheduled_at).toLocaleString('id-ID', { hour12: false })}`);
+            if (updates.technician_name) messageStr.push(`ditugaskan ke Teknisi ${updates.technician_name}`);
+
+            return `Pembaruan jadwal servis "${tickets[0].guest_name}" berhasil: ${messageStr.join(' dan ')}.`;
         }
 
         else if (functionName === 'get_invoice') {
@@ -526,7 +579,7 @@ bot.on('message', async (msg) => {
     // Prepare messages for API (prepend system prompt dynamically with fresh time)
     const systemPrompt = {
         role: 'system',
-        content: `You are a professional AI Assistant for a POS and Inventory system called CodevaTech. You communicate primarily in Indonesian. You use the provided tools to interact with the database. Format your responses nicely for Telegram. Current Date and Time: ${currentDate}. If extracting a date and time for a schedule, output it in YYYY-MM-DDTHH:mm:ss format.`
+        content: `You are a professional AI Assistant for a POS and Inventory system called CodevaTech. You communicate primarily in Indonesian. You use the provided tools to interact with the database. Format your responses nicely for Telegram. Current Date and Time: ${currentDate}. in WITA / Asia/Makassar / GMT+8 context. Please ensure any generated 'scheduled_at' uses full ISO8601 format mapping to this local time (e.g. 2026-03-12T12:00:00+08:00) so it's correct for the local DB. If extracting a date and time for a schedule, output it in YYYY-MM-DDTHH:mm:ss format. If asked who is assigned to a schedule or what the customer phone number is, look carefully at the returned PIC/Teknisi and Phone tags from get_schedules.`
     };
     let apiMessages = [systemPrompt, ...chatHistory];
 
