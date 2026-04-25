@@ -284,7 +284,17 @@ export default function History() {
                                                                 </div>
                                                             </td>
                                                             <td className="px-6 py-4 text-slate-500">
-                                                                {tx.transaction_items ? tx.transaction_items.length : 0} items
+                                                                {tx.transaction_items && tx.transaction_items.length > 0 ? (
+                                                                    <div className="flex flex-col gap-0.5">
+                                                                        {tx.transaction_items.map((item, i) => (
+                                                                            <span key={i} className="text-xs truncate max-w-[200px] text-slate-600 dark:text-slate-400">
+                                                                                • {item.quantity}x {item.product_name}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs">0 items</span>
+                                                                )}
                                                             </td>
                                                             <td className="px-6 py-4 text-right flex flex-col items-end gap-0.5">
                                                                 {tx.technician_fee > 0 && (

@@ -2,159 +2,129 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Wand2, Loader2, Send, Database, User, Bot, Plus, MessageSquare, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// --- Zhipu AI Integration ---
-const API_KEY = import.meta.env.VITE_ZHIPU_API_KEY;
-const API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-const MODEL_NAME = 'glm-4.5-flash';
+// --- Gemini AI Integration ---
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const MODEL_NAME = 'gemini-2.5-flash';
 
 // --- Available Tools for AI ---
 const TOOLS = [
     {
-        type: 'function',
-        function: {
-            name: 'get_inventory',
-            description: 'Fetch the current inventory items, including their stock, price, and category. Use this to answer questions about available items.',
-            parameters: { type: 'object', properties: {} }
+        name: 'get_inventory',
+        description: 'Fetch the current inventory items, including their stock, price, and category. Use this to answer questions about available items.',
+        parameters: { type: 'OBJECT', properties: {} }
+    },
+    {
+        name: 'add_inventory',
+        description: 'Add a new product to the inventory database.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                name: { type: 'STRING', description: 'Name of the product' },
+                price: { type: 'NUMBER', description: 'Price in numeric format (e.g. 150000)' },
+                stock: { type: 'NUMBER', description: 'Initial stock quantity' },
+                category: { type: 'STRING', description: 'Product category (Product, Service, Part, Accessory, Thermal Paste/Putty/Pad/Liquid)' },
+                sku: { type: 'STRING', description: 'Unique identifier or code (optional)' }
+            },
+            required: ['name', 'price', 'stock', 'category']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_inventory',
-            description: 'Add a new product to the inventory database.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    name: { type: 'string', description: 'Name of the product' },
-                    price: { type: 'number', description: 'Price in numeric format (e.g. 150000)' },
-                    stock: { type: 'number', description: 'Initial stock quantity' },
-                    category: { type: 'string', enum: ['Product', 'Service', 'Part', 'Accessory', 'Thermal Paste/Putty/Pad/Liquid'], description: 'Product category' },
-                    sku: { type: 'string', description: 'Unique identifier or code (optional)' }
-                },
-                required: ['name', 'price', 'stock', 'category']
+        name: 'get_expenses',
+        description: 'Fetch the recent recorded expenses.',
+        parameters: { type: 'OBJECT', properties: {} }
+    },
+    {
+        name: 'add_expense',
+        description: 'Record a new expense to the database.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                description: { type: 'STRING', description: 'What the expense was for' },
+                amount: { type: 'NUMBER', description: 'Total expense amount' },
+                category: { type: 'STRING', description: 'Expense category (operasional, stock_purchase)' }
+            },
+            required: ['description', 'amount', 'category']
+        }
+    },
+    {
+        name: 'add_schedule',
+        description: 'Create a new service repair or maintenance ticket/schedule.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
+                guest_phone: { type: 'STRING', description: 'Phone number of the customer (optional)' },
+                device_model: { type: 'STRING', description: 'Device/laptop model being repaired' },
+                activity_name: { type: 'STRING', description: 'What is the service issue, e.g. "Ganti LCD"' },
+                service_type: { type: 'STRING', description: 'Service location type (In-Store, On-Site). If a specific external location is mentioned, it should be On-Site.' },
+                estimated_total: { type: 'NUMBER', description: 'Total estimated price' },
+                location: { type: 'STRING', description: 'Address or specific location for the service (e.g. Kopi Kenangan Stasiun Juanda, Rumah, etc). Do not put this in activity_name.' },
+                scheduled_at: { type: 'STRING', description: 'Date and time of the schedule in ISO 8601 format (YYYY-MM-DDTHH:mm:ss). Take the date and time from the prompt and convert it to this format.' }
+            },
+            required: ['device_model', 'activity_name', 'estimated_total']
+        }
+    },
+    {
+        name: 'add_transaction',
+        description: 'Process a new Point of Sale transaction for a quick sale or simple purchase.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
+                product_name: { type: 'STRING', description: 'What is being sold (manual input item name)' },
+                total_amount: { type: 'NUMBER', description: 'Total sale amount' },
+                payment_method: { type: 'STRING', description: 'How they paid (cash, transfer)' }
+            },
+            required: ['product_name', 'total_amount', 'payment_method']
+        }
+    },
+    {
+        name: 'get_schedules',
+        description: 'Fetch existing service schedules/tickets. Can be filtered by status.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                status: { type: 'STRING', description: 'Filter by ticket status (e.g., "Scheduled", "In Progress", "Ready", "Completed", "Cancelled"). If not provided, fetches all recent active tickets.' }
             }
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'get_expenses',
-            description: 'Fetch the recent recorded expenses.',
-            parameters: { type: 'object', properties: {} }
+        name: 'update_schedule_status',
+        description: 'Update the status of an existing service schedule/ticket.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer on the ticket' },
+                new_status: { type: 'STRING', description: 'The new status to set for the schedule (Scheduled, In Progress, Ready, Completed, Cancelled)' }
+            },
+            required: ['guest_name', 'new_status']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_expense',
-            description: 'Record a new expense to the database.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    description: { type: 'string', description: 'What the expense was for' },
-                    amount: { type: 'number', description: 'Total expense amount' },
-                    category: { type: 'string', enum: ['operasional', 'stock_purchase'], description: 'Expense category' }
-                },
-                required: ['description', 'amount', 'category']
-            }
+        name: 'update_schedule_details',
+        description: 'Update the date/time or technician assigned to an existing service schedule.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer on the ticket' },
+                scheduled_at: { type: 'STRING', description: 'The new scheduled date and time in ISO8601 format with local timezone offset, e.g., 2026-03-12T14:00:00+07:00' },
+                technician_name: { type: 'STRING', description: 'The new technician (PIC) name assigned to handle the service ticket' }
+            },
+            required: ['guest_name']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_schedule',
-            description: 'Create a new service repair or maintenance ticket/schedule.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
-                    guest_phone: { type: 'string', description: 'Phone number of the customer (optional)' },
-                    device_model: { type: 'string', description: 'Device/laptop model being repaired' },
-                    activity_name: { type: 'string', description: 'What is the service issue, e.g. "Ganti LCD"' },
-                    service_type: { type: 'string', enum: ['In-Store', 'On-Site'], description: 'Service location type. If a specific external location is mentioned, it should be On-Site.' },
-                    estimated_total: { type: 'number', description: 'Total estimated price' },
-                    location: { type: 'string', description: 'Address or specific location for the service (e.g. Kopi Kenangan Stasiun Juanda, Rumah, etc). Do not put this in activity_name.' },
-                    scheduled_at: { type: 'string', description: 'Date and time of the schedule in ISO 8601 format (YYYY-MM-DDTHH:mm:ss). Take the date and time from the prompt and convert it to this format.' }
-                },
-                required: ['device_model', 'activity_name', 'estimated_total']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'add_transaction',
-            description: 'Process a new Point of Sale transaction for a quick sale or simple purchase.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
-                    product_name: { type: 'string', description: 'What is being sold (manual input item name)' },
-                    total_amount: { type: 'number', description: 'Total sale amount' },
-                    payment_method: { type: 'string', enum: ['cash', 'transfer'], description: 'How they paid' }
-                },
-                required: ['product_name', 'total_amount', 'payment_method']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'get_schedules',
-            description: 'Fetch existing service schedules/tickets. Can be filtered by status.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    status: { type: 'string', description: 'Filter by ticket status (e.g., "Scheduled", "In Progress", "Ready", "Completed", "Cancelled"). If not provided, fetches all recent active tickets.' }
-                }
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'update_schedule_status',
-            description: 'Update the status of an existing service schedule/ticket.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer on the ticket' },
-                    new_status: { type: 'string', enum: ['Scheduled', 'In Progress', 'Ready', 'Completed', 'Cancelled'], description: 'The new status to set for the schedule' }
-                },
-                required: ['guest_name', 'new_status']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'update_schedule_details',
-            description: 'Update the date/time or technician assigned to an existing service schedule.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer on the ticket' },
-                    scheduled_at: { type: 'string', description: 'The new scheduled date and time in ISO8601 format with local timezone offset, e.g., 2026-03-12T14:00:00+07:00' },
-                    technician_name: { type: 'string', description: 'The new technician (PIC) name assigned to handle the service ticket' }
-                },
-                required: ['guest_name']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'get_invoice',
-            description: 'Fetch an invoice for a specific customer based on their name or phone number. Searches both POS transactions and completed service schedules.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    search_query: { type: 'string', description: 'Customer name or phone number to search for (e.g. "Budi", "08123456789")' },
-                    type: { type: 'string', enum: ['pos', 'schedule', 'any'], description: 'Whether looking for pos transactions, schedules, or any' }
-                },
-                required: ['search_query']
-            }
+        name: 'get_invoice',
+        description: 'Fetch an invoice for a specific customer based on their name or phone number. Searches both POS transactions and completed service schedules.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                search_query: { type: 'STRING', description: 'Customer name or phone number to search for (e.g. "Budi", "08123456789")' },
+                type: { type: 'STRING', description: 'Whether looking for pos transactions, schedules, or any' }
+            },
+            required: ['search_query']
         }
     }
 ];
@@ -376,6 +346,7 @@ export default function AiAutoInput() {
                         transaction_id: newTx.id,
                         product_name: args.product_name || 'Manual Sale via AI',
                         quantity: 1,
+                        price_at_sale: totalAmount,
                         price: totalAmount
                     }]);
 
@@ -513,43 +484,66 @@ export default function AiAutoInput() {
         }
     };
 
-    const callZhipuAPI = async (currentMessages) => {
-        const apiMessages = currentMessages.map(m => ({
-            role: m.role,
-            content: m.content || "",
-            ...(m.tool_calls && { tool_calls: m.tool_calls }),
-            ...(m.tool_call_id && { tool_call_id: m.tool_call_id }),
-            ...(m.name && { name: m.name })
-        }));
-
+    const callGeminiAPI = async (currentMessages) => {
+        const genAI = new GoogleGenerativeAI(API_KEY);
         const currentDate = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'full' });
-        apiMessages.unshift({
-            role: 'system',
-            content: `You are a professional AI Assistant for a POS and Inventory system called CodevaTech. You communicate primarily in Indonesian. You can read inventory, add inventory, read expenses, and add expenses using the provided tools. Be polite and concise. Current Date and Time: ${currentDate}. IMPORTANT: For 'add_schedule', 'scheduled_at' MUST be a full ISO8601 string including local timezone offset, e.g. "2026-03-12T12:00:00+07:00" or "+08:00". Do NOT use UTC 'Z' if the user means local time. If asked who is assigned to a schedule or what the customer phone number is, look carefully at the returned PIC/Teknisi and Phone tags from get_schedules.`
+
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            systemInstruction: `You are a professional AI Assistant for a POS and Inventory system called CodevaTech. You communicate primarily in Indonesian. You can read inventory, add inventory, read expenses, and add expenses using the provided tools. Be polite and concise. Current Date and Time: ${currentDate}. IMPORTANT: For 'add_schedule', 'scheduled_at' MUST be a full ISO8601 string including local timezone offset, e.g. "2026-03-12T12:00:00+07:00" or "+08:00". Do NOT use UTC 'Z' if the user means local time. If asked who is assigned to a schedule or what the customer phone number is, look carefully at the returned PIC/Teknisi and Phone tags from get_schedules.`,
+            tools: [{ functionDeclarations: TOOLS }]
         });
 
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: MODEL_NAME,
-                messages: apiMessages,
-                tools: TOOLS,
-                tool_choice: "auto",
-                temperature: 0.1,
-                top_p: 0.7,
-            })
-        });
+        const contents = currentMessages.map(m => {
+            if (m.role === 'user') {
+                return { role: 'user', parts: [{ text: m.content || "" }] };
+            } else if (m.role === 'assistant') {
+                if (m.tool_calls) {
+                    return {
+                        role: 'model',
+                        parts: m.tool_calls.map(tc => ({
+                            functionCall: {
+                                name: tc.function.name,
+                                args: JSON.parse(tc.function.arguments)
+                            }
+                        }))
+                    };
+                }
+                return { role: 'model', parts: [{ text: m.content || "" }] };
+            } else if (m.role === 'tool') {
+                return {
+                    role: 'function',
+                    parts: [{
+                        functionResponse: {
+                            name: m.name,
+                            response: { result: m.content }
+                        }
+                    }]
+                };
+            }
+        }).filter(Boolean);
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error?.message || 'Failed to connect to API');
+        const response = await model.generateContent({ contents });
+        const result = response.response;
+
+        let functionCalls = result.functionCalls();
+        if (functionCalls && functionCalls.length > 0) {
+            return {
+                role: 'assistant',
+                tool_calls: functionCalls.map(call => ({
+                    id: Math.random().toString(36).substring(7),
+                    function: {
+                        name: call.name,
+                        arguments: JSON.stringify(call.args)
+                    }
+                }))
+            };
         }
 
-        return await response.json();
+        return {
+            role: 'assistant',
+            content: result.text()
+        };
     };
 
     const handleSend = async (e) => {
@@ -564,8 +558,7 @@ export default function AiAutoInput() {
         setMessages(chatHistory);
 
         try {
-            let apiResponse = await callZhipuAPI(chatHistory);
-            let responseMessage = apiResponse.choices[0].message;
+            let responseMessage = await callGeminiAPI(chatHistory);
 
             while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
                 chatHistory.push(responseMessage);
@@ -585,8 +578,7 @@ export default function AiAutoInput() {
                 }
                 setMessages([...chatHistory]);
 
-                apiResponse = await callZhipuAPI(chatHistory);
-                responseMessage = apiResponse.choices[0].message;
+                responseMessage = await callGeminiAPI(chatHistory);
             }
 
             if (responseMessage.content) {
@@ -698,7 +690,7 @@ export default function AiAutoInput() {
                             </button>
                         </form>
                         <p className="text-center text-xs text-slate-400 mt-3">
-                            AI Assistant menggunakan model GLM-4.5-Flash. Data disimpan secara lokal di browser Anda.
+                            AI Assistant menggunakan model Gemini 2.5 Flash. Data disimpan secara lokal di browser Anda.
                         </p>
                     </div>
                 </div>

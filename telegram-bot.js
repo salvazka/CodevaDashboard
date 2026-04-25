@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import TelegramBot from 'node-telegram-bot-api';
 import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import PDFDocument from 'pdfkit';
 
@@ -11,9 +11,9 @@ dotenv.config();
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-const zhipuApiKey = process.env.VITE_ZHIPU_API_KEY;
+const geminiApiKey = process.env.VITE_GEMINI_API_KEY;
 
-if (!token || !supabaseUrl || !supabaseKey || !zhipuApiKey) {
+if (!token || !supabaseUrl || !supabaseKey || !geminiApiKey) {
     console.error("Missing required environment variables. Please check .env file.");
     process.exit(1);
 }
@@ -21,155 +21,142 @@ if (!token || !supabaseUrl || !supabaseKey || !zhipuApiKey) {
 // 2. Initialize Clients
 const bot = new TelegramBot(token, { polling: true });
 const supabase = createClient(supabaseUrl, supabaseKey);
-const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+const genAI = new GoogleGenerativeAI(geminiApiKey);
 
 // 3. Define Tools
 const TOOLS = [
     {
-        type: 'function',
-        function: {
-            name: 'get_inventory',
-            description: 'Fetch the current inventory items, including their stock, price, and category. Use this to answer questions about available items.',
-            parameters: { type: 'object', properties: {} }
+        name: 'get_inventory',
+        description: 'Fetch the current inventory items, including their stock, price, and category. Use this to answer questions about available items.',
+        parameters: { type: 'OBJECT', properties: {} }
+    },
+    {
+        name: 'add_inventory',
+        description: 'Add a new product to the inventory database.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                name: { type: 'STRING', description: 'Name of the product' },
+                price: { type: 'NUMBER', description: 'Price in numeric format (e.g. 150000)' },
+                stock: { type: 'NUMBER', description: 'Initial stock quantity' },
+                category: { type: 'STRING', description: 'Product category (Product, Service, Part, Accessory, Thermal Paste/Putty/Pad/Liquid)' },
+                sku: { type: 'STRING', description: 'Unique identifier or code (optional)' }
+            },
+            required: ['name', 'price', 'stock', 'category']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_inventory',
-            description: 'Add a new product to the inventory database.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    name: { type: 'string', description: 'Name of the product' },
-                    price: { type: 'number', description: 'Price in numeric format (e.g. 150000)' },
-                    stock: { type: 'number', description: 'Initial stock quantity' },
-                    category: { type: 'string', enum: ['Product', 'Service', 'Part', 'Accessory', 'Thermal Paste/Putty/Pad/Liquid'], description: 'Product category' },
-                    sku: { type: 'string', description: 'Unique identifier or code (optional)' }
-                },
-                required: ['name', 'price', 'stock', 'category']
+        name: 'get_expenses',
+        description: 'Fetch the recent recorded expenses.',
+        parameters: { type: 'OBJECT', properties: {} }
+    },
+    {
+        name: 'add_expense',
+        description: 'Record a new expense to the database.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                description: { type: 'STRING', description: 'What the expense was for' },
+                amount: { type: 'NUMBER', description: 'Total expense amount' },
+                category: { type: 'STRING', description: 'Expense category (operasional, stock_purchase)' }
+            },
+            required: ['description', 'amount', 'category']
+        }
+    },
+    {
+        name: 'add_schedule',
+        description: 'Create a new service repair or maintenance ticket/schedule.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
+                guest_phone: { type: 'STRING', description: 'Phone number of the customer (optional)' },
+                device_model: { type: 'STRING', description: 'Device/laptop model being repaired' },
+                activity_name: { type: 'STRING', description: 'What is the service issue, e.g. "Ganti LCD"' },
+                service_type: { type: 'STRING', description: 'Service location type (In-Store, On-Site). If a specific external location is mentioned, it should be On-Site.' },
+                estimated_total: { type: 'NUMBER', description: 'Total estimated price' },
+                location: { type: 'STRING', description: 'Address or specific location for the service (e.g. Kopi Kenangan Stasiun Juanda, Rumah, etc). Do not put this in activity_name.' },
+                scheduled_at: { type: 'STRING', description: 'Date and time of the schedule in ISO 8601 format (YYYY-MM-DDTHH:mm:ss). Take the date and time from the prompt and convert it to this format.' }
+            },
+            required: ['device_model', 'activity_name', 'estimated_total']
+        }
+    },
+    {
+        name: 'add_transaction',
+        description: 'Process a new Point of Sale transaction for a quick sale or simple purchase.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
+                product_name: { type: 'STRING', description: 'What is being sold (manual input item name)' },
+                total_amount: { type: 'NUMBER', description: 'Total sale amount' },
+                payment_method: { type: 'STRING', description: 'How they paid (cash, transfer)' }
+            },
+            required: ['product_name', 'total_amount', 'payment_method']
+        }
+    },
+    {
+        name: 'get_schedules',
+        description: 'Fetch existing service schedules/tickets. Can be filtered by status.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                status: { type: 'STRING', description: 'Filter by ticket status (e.g., "Scheduled", "In Progress", "Ready", "Completed", "Cancelled"). If not provided, fetches all recent active tickets.' }
             }
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'get_expenses',
-            description: 'Fetch the recent recorded expenses.',
-            parameters: { type: 'object', properties: {} }
+        name: 'update_schedule_status',
+        description: 'Update the status of an existing service schedule/ticket.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer on the ticket' },
+                new_status: { type: 'STRING', description: 'The new status to set for the schedule (Scheduled, In Progress, Ready, Completed, Cancelled)' }
+            },
+            required: ['guest_name', 'new_status']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_expense',
-            description: 'Record a new expense to the database.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    description: { type: 'string', description: 'What the expense was for' },
-                    amount: { type: 'number', description: 'Total expense amount' },
-                    category: { type: 'string', enum: ['operasional', 'stock_purchase'], description: 'Expense category' }
-                },
-                required: ['description', 'amount', 'category']
-            }
+        name: 'update_schedule_details',
+        description: 'Update the date/time or technician assigned to an existing service schedule.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer on the ticket' },
+                scheduled_at: { type: 'STRING', description: 'The new scheduled date and time in ISO8601 format with local timezone offset, e.g., 2026-03-12T14:00:00+07:00' },
+                technician_name: { type: 'STRING', description: 'The new technician (PIC) name assigned to handle the service ticket' }
+            },
+            required: ['guest_name']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_schedule',
-            description: 'Create a new service repair or maintenance ticket/schedule.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
-                    guest_phone: { type: 'string', description: 'Phone number of the customer (optional)' },
-                    device_model: { type: 'string', description: 'Device/laptop model being repaired' },
-                    activity_name: { type: 'string', description: 'What is the service issue, e.g. "Ganti LCD"' },
-                    service_type: { type: 'string', enum: ['In-Store', 'On-Site'], description: 'Service location type. If a specific external location is mentioned, it should be On-Site.' },
-                    estimated_total: { type: 'number', description: 'Total estimated price' },
-                    location: { type: 'string', description: 'Address or specific location for the service (e.g. Kopi Kenangan Stasiun Juanda, Rumah, etc). Do not put this in activity_name.' },
-                    scheduled_at: { type: 'string', description: 'Date and time of the schedule in ISO 8601 format (YYYY-MM-DDTHH:mm:ss). Take the date and time from the prompt and convert it to this format.' }
-                },
-                required: ['device_model', 'activity_name', 'estimated_total']
-            }
+        name: 'get_invoice',
+        description: 'Fetch an invoice for a specific customer based on their name or phone number. Searches both POS transactions and completed service schedules.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                search_query: { type: 'STRING', description: 'Customer name or phone number to search for (e.g. "Budi", "08123456789")' },
+                type: { type: 'STRING', description: 'Whether looking for pos transactions, schedules, or any' }
+            },
+            required: ['search_query']
         }
     },
     {
-        type: 'function',
-        function: {
-            name: 'add_transaction',
-            description: 'Process a new Point of Sale transaction for a quick sale or simple purchase.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
-                    product_name: { type: 'string', description: 'What is being sold (manual input item name)' },
-                    total_amount: { type: 'number', description: 'Total sale amount' },
-                    payment_method: { type: 'string', enum: ['cash', 'transfer'], description: 'How they paid' }
-                },
-                required: ['product_name', 'total_amount', 'payment_method']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'get_schedules',
-            description: 'Fetch existing service schedules/tickets. Can be filtered by status.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    status: { type: 'string', description: 'Filter by ticket status (e.g., "Scheduled", "In Progress", "Ready", "Completed", "Cancelled"). If not provided, fetches all recent active tickets.' }
-                }
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'update_schedule_status',
-            description: 'Update the status of an existing service schedule/ticket.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer on the ticket' },
-                    new_status: { type: 'string', enum: ['Scheduled', 'In Progress', 'Ready', 'Completed', 'Cancelled'], description: 'The new status to set for the schedule' }
-                },
-                required: ['guest_name', 'new_status']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'update_schedule_details',
-            description: 'Update the date/time or technician assigned to an existing service schedule.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    guest_name: { type: 'string', description: 'Name of the customer on the ticket' },
-                    scheduled_at: { type: 'string', description: 'The new scheduled date and time in ISO8601 format with local timezone offset, e.g., 2026-03-12T14:00:00+07:00' },
-                    technician_name: { type: 'string', description: 'The new technician (PIC) name assigned to handle the service ticket' }
-                },
-                required: ['guest_name']
-            }
-        }
-    },
-    {
-        type: 'function',
-        function: {
-            name: 'get_invoice',
-            description: 'Fetch an invoice for a specific customer based on their name or phone number. Searches both POS transactions and completed service schedules.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    search_query: { type: 'string', description: 'Customer name or phone number to search for (e.g. "Budi", "08123456789")' },
-                    type: { type: 'string', enum: ['pos', 'schedule', 'any'], description: 'Whether looking for pos transactions, schedules, or any' }
-                },
-                required: ['search_query']
-            }
+        name: 'add_quick_invoice',
+        description: 'Create a quick invoice for a laptop service. Useful when the user provides laptop model, service description, brand, package, and price.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                guest_name: { type: 'STRING', description: 'Name of the customer. Defaults to "Guest" if not provided.' },
+                laptop_model: { type: 'STRING', description: 'Model of the laptop/device' },
+                service_description: { type: 'STRING', description: 'Description of the service performed' },
+                brand_used: { type: 'STRING', description: 'Brand of the product/paste used (optional)' },
+                package_name: { type: 'STRING', description: 'Name of the service package used (optional)' },
+                price: { type: 'NUMBER', description: 'Price of the service' },
+                payment_method: { type: 'STRING', description: 'How they paid (cash, transfer). Default is cash.' }
+            },
+            required: ['laptop_model', 'service_description', 'price']
         }
     }
 ];
@@ -387,12 +374,52 @@ async function executeTool(functionName, args, chatId) {
                     transaction_id: newTx.id,
                     product_name: args.product_name || 'Manual Sale via AI',
                     quantity: 1,
+                    price_at_sale: totalAmount,
                     price: totalAmount
                 }]);
 
             if (itemsError) throw itemsError;
 
             return `Berhasil merekam transaksi (kategori POS): Penjualan produk "${args.product_name}" ke ${customerName} dengan total Rp ${totalAmount} via ${args.payment_method}.`;
+        }
+
+        else if (functionName === 'add_quick_invoice') {
+            const customerName = args.guest_name || 'Guest';
+            const price = args.price || 0;
+
+            let extraDetails = [];
+            if (args.brand_used) extraDetails.push(`Merk: ${args.brand_used}`);
+            if (args.package_name) extraDetails.push(`Pkg: ${args.package_name}`);
+
+            const detailedName = extraDetails.length > 0 ? ` (${extraDetails.join(', ')})` : '';
+            const productName = `[${args.laptop_model}] ${args.service_description}${detailedName}`;
+
+            const { data: newTx, error: txError } = await supabase
+                .from('transactions')
+                .insert([{
+                    guest_name: customerName,
+                    total: price,
+                    payment_method: args.payment_method || 'cash',
+                    status: 'completed'
+                }])
+                .select()
+                .single();
+
+            if (txError) throw txError;
+
+            const { error: itemsError } = await supabase
+                .from('transaction_items')
+                .insert([{
+                    transaction_id: newTx.id,
+                    product_name: productName,
+                    quantity: 1,
+                    price_at_sale: price,
+                    price: price
+                }]);
+
+            if (itemsError) throw itemsError;
+
+            return `Berhasil membuat invoice cepat: Service "${args.service_description}" untuk Laptop "${args.laptop_model}"${detailedName} atas nama ${customerName} dengan total Rp ${price} via ${args.payment_method}.`;
         }
 
         else if (functionName === 'update_schedule_status') {
@@ -573,83 +600,94 @@ bot.on('message', async (msg) => {
     const currentDate = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'full' });
     let chatHistory = userSessions[chatId];
 
-    // Add current user message
-    chatHistory.push({ role: 'user', content: text });
+    const systemInstruction = `You are a professional AI Assistant for a POS and Inventory system called CodevaTech. You communicate primarily in Indonesian. You use the provided tools to interact with the database. Format your responses nicely for Telegram. Current Date and Time: ${currentDate}. in WITA / Asia/Makassar / GMT+8 context. Please ensure any generated 'scheduled_at' uses full ISO8601 format mapping to this local time (e.g. 2026-03-12T12:00:00+08:00) so it's correct for the local DB. If extracting a date and time for a schedule, output it in YYYY-MM-DDTHH:mm:ss format. If asked who is assigned to a schedule or what the customer phone number is, look carefully at the returned PIC/Teknisi and Phone tags from get_schedules. KETENTUAN PENTING: Saat Anda diminta untuk mengambil atau menjelaskan sebuah invoice (transaksi/history), Anda WAJIB menjabarkan detail "Item" atau "Service" apa saja yang ada di dalamnya, bukan hanya memberikan total harganya. Jawab dengan lengkap namun rapi. Untuk permintaan pembuatan invoice cepat (seperti "Invoice Laptop X, Service Y, Harga Z"), gunakan tool add_quick_invoice agar data tersimpan dengan format laptop, service, merk (brand_used), dan paket (package_name) yang jelas.`;
 
-    // Prepare messages for API (prepend system prompt dynamically with fresh time)
-    const systemPrompt = {
-        role: 'system',
-        content: `You are a professional AI Assistant for a POS and Inventory system called CodevaTech. You communicate primarily in Indonesian. You use the provided tools to interact with the database. Format your responses nicely for Telegram. Current Date and Time: ${currentDate}. in WITA / Asia/Makassar / GMT+8 context. Please ensure any generated 'scheduled_at' uses full ISO8601 format mapping to this local time (e.g. 2026-03-12T12:00:00+08:00) so it's correct for the local DB. If extracting a date and time for a schedule, output it in YYYY-MM-DDTHH:mm:ss format. If asked who is assigned to a schedule or what the customer phone number is, look carefully at the returned PIC/Teknisi and Phone tags from get_schedules.`
+    const modelOptions = {
+        model: "gemini-2.5-flash",
+        systemInstruction,
+        tools: [{ functionDeclarations: TOOLS }]
     };
-    let apiMessages = [systemPrompt, ...chatHistory];
+
+    const model = genAI.getGenerativeModel(modelOptions);
+
+    let chatSession;
+    try {
+        chatSession = model.startChat({ history: chatHistory });
+    } catch (e) {
+        console.error("History format error, clearing history", e);
+        chatHistory = [];
+        chatSession = model.startChat({ history: [] });
+    }
 
     try {
-        let apiRes = await axios.post(ZHIPU_API_URL, {
-            model: "glm-4.5-flash",
-            messages: apiMessages,
-            tools: TOOLS,
-            tool_choice: "auto",
-            temperature: 0.1,
-            top_p: 0.7,
-        }, { headers: { 'Authorization': `Bearer ${zhipuApiKey}` } });
+        let response;
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                response = await chatSession.sendMessage(text);
+                break;
+            } catch (err) {
+                retries--;
+                if (retries === 0) throw err;
+                console.log(`[Gemini API] Request failed (${err.status}). Retrying in 3 seconds...`);
+                await new Promise(r => setTimeout(r, 3000));
+            }
+        }
+        let result = response.response;
 
-        let responseMessage = apiRes.data.choices[0].message;
+        let functionCalls = result.functionCalls();
 
-        while (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-            // Keep tool_calls for context
-            chatHistory.push(responseMessage);
-            apiMessages = [systemPrompt, ...chatHistory];
+        while (functionCalls && functionCalls.length > 0) {
+            const toolResponses = [];
+            for (const toolCall of functionCalls) {
+                const funcName = toolCall.name;
+                const funcArgs = toolCall.args;
 
-            for (const toolCall of responseMessage.tool_calls) {
-                const funcName = toolCall.function.name;
-                let funcArgs;
-                try {
-                    funcArgs = JSON.parse(toolCall.function.arguments);
-                } catch (e) {
-                    funcArgs = {};
-                }
-
-                // Show a mini status to user
                 bot.sendMessage(chatId, `Sedang mengakses database (${funcName})...`);
 
                 const toolResult = await executeTool(funcName, funcArgs, chatId);
 
-                chatHistory.push({
-                    role: 'tool',
-                    content: toolResult,
-                    tool_call_id: toolCall.id,
-                    name: funcName
+                toolResponses.push({
+                    functionResponse: {
+                        name: funcName,
+                        response: { result: toolResult }
+                    }
                 });
             }
 
-            apiMessages = [systemPrompt, ...chatHistory];
-
-            // Re-call API to summarize tool execution
-            apiRes = await axios.post(ZHIPU_API_URL, {
-                model: "glm-4.5-flash",
-                messages: apiMessages,
-                tools: TOOLS
-            }, { headers: { 'Authorization': `Bearer ${zhipuApiKey}` } });
-
-            responseMessage = apiRes.data.choices[0].message;
+            // Send the tool results back to Gemini with retry
+            let fnRetries = 3;
+            while (fnRetries > 0) {
+                try {
+                    response = await chatSession.sendMessage(toolResponses);
+                    break;
+                } catch (err) {
+                    fnRetries--;
+                    if (fnRetries === 0) throw err;
+                    console.log(`[Gemini API] Tool Response failed (${err.status}). Retrying in 3 seconds...`);
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+            }
+            result = response.response;
+            functionCalls = result.functionCalls();
         }
 
-        if (responseMessage.content) {
-            chatHistory.push({ role: 'assistant', content: responseMessage.content });
-            bot.sendMessage(chatId, responseMessage.content);
+        const replyText = result.text();
+        if (replyText) {
+            bot.sendMessage(chatId, replyText);
         }
 
-        // Limit history to 20 messages to save tokens
-        if (chatHistory.length > 20) {
-            userSessions[chatId] = chatHistory.slice(chatHistory.length - 20);
+        // Save back into userSessions
+        userSessions[chatId] = await chatSession.getHistory();
+
+        // Limit history to 20 interactions
+        if (userSessions[chatId].length > 40) {
+            userSessions[chatId] = userSessions[chatId].slice(-40);
         }
 
     } catch (err) {
-        console.error(err.response?.data || err.message);
+        console.error(err);
         bot.sendMessage(chatId, "❌ Maaf, terjadi kesalahan saat menghubungi server AI.");
-
-        // Remove the user message that caused the error so they can try again
-        chatHistory.pop();
     }
 });
 

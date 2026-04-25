@@ -287,6 +287,7 @@ export default function POS() {
                 product_id: item.isManual ? null : item.id,
                 product_name: item.name,
                 quantity: item.quantity,
+                price_at_sale: item.price,
                 price: item.price
             }));
 
